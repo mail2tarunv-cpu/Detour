@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Detour — AR</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@200;300;400;500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/umd/lucide.min.js"></script>
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --green:#7eb8d4; --warm:#e8d6d3;
+  --fog:rgba(10,14,12,0.62); --fog-b:rgba(255,255,255,0.14);
+  --t1:rgba(255,255,255,0.97); --t2:rgba(255,255,255,0.60);
+}
+html,body { width:100%;height:100%;background:#000;overflow:hidden;font-family:'DM Sans',sans-serif;color:var(--t1); }
+
+#camera { position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block; }
+#fallback { position:fixed;inset:0;z-index:1;display:none;background:radial-gradient(ellipse 130% 90% at 35% 65%,#1b3028,transparent 55%),radial-gradient(ellipse 90% 110% at 75% 25%,#1a1828,transparent 55%),#070c0a; }
+#vignette { position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse 85% 75% at 50% 50%,transparent 45%,rgba(0,0,0,0.55) 100%); }
+#tint { position:fixed;inset:0;z-index:9;pointer-events:none;background:rgba(0,0,0,0.38);display:none; }
+#mglow { position:fixed;inset:0;z-index:10;pointer-events:none;background:radial-gradient(ellipse 80% 70% at 50% 50%,rgba(232,214,211,0.07),transparent 70%);animation:mg 3s ease-in-out infinite;display:none; }
+@keyframes mg { 0%,100%{opacity:0.7}50%{opacity:1} }
+
+#hud { position:fixed;inset:0;z-index:10;pointer-events:none; }
+#hud>* { pointer-events:auto; }
+
+/* progress */
+#ptrack { position:fixed;top:0;left:0;right:0;height:2px;background:rgba(255,255,255,0.06);z-index:12;display:none; }
+#pfill { height:100%;width:0%;background:var(--green);transition:width 0.65s ease;box-shadow:0 0 6px rgba(126,184,212,0.7); }
+
+/* scan */
+#scan-wrap { position:fixed;inset:0;z-index:11;display:none;align-items:center;justify-content:center;pointer-events:none; }
+.reticle { width:180px;height:180px;position:relative; }
+.rbox { width:100%;height:100%;border:1px solid rgba(126,184,212,0.2);border-radius:14px;position:relative;animation:rp 2s ease-in-out infinite; }
+.rc { position:absolute;width:18px;height:18px; }
+.rc.tl{top:-1px;left:-1px;border-top:2px solid var(--green);border-left:2px solid var(--green);border-radius:5px 0 0 0;}
+.rc.tr{top:-1px;right:-1px;border-top:2px solid var(--green);border-right:2px solid var(--green);border-radius:0 5px 0 0;}
+.rc.bl{bottom:-1px;left:-1px;border-bottom:2px solid var(--green);border-left:2px solid var(--green);border-radius:0 0 0 5px;}
+.rc.br{bottom:-1px;right:-1px;border-bottom:2px solid var(--green);border-right:2px solid var(--green);border-radius:0 0 5px 0;}
+.sweep{position:absolute;left:5px;right:5px;height:1px;background:linear-gradient(90deg,transparent,var(--green),transparent);animation:sw 2s ease-in-out infinite;}
+@keyframes sw{0%,100%{top:8%;opacity:0}15%{opacity:1}85%{opacity:1}99%{top:88%;opacity:0}}
+@keyframes rp{0%,100%{border-color:rgba(126,184,212,0.15)}50%{border-color:rgba(126,184,212,0.5)}}
+
+/* particles */
+.pt{position:fixed;width:3px;height:3px;border-radius:50%;background:var(--warm);pointer-events:none;z-index:11;animation:pr 5s ease-in-out infinite;opacity:0;}
+@keyframes pr{0%{opacity:0;transform:translateY(0)}15%{opacity:0.5}85%{opacity:0.25}100%{opacity:0;transform:translateY(-55vh) translateX(10px)}}
+
+/* atoms */
+.card { background:var(--fog);border:1px solid var(--fog-b);border-radius:10px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:11px 14px; }
+.pill { display:inline-flex;align-items:center;gap:5px;background:var(--fog);border:1px solid var(--fog-b);border-radius:100px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding:6px 12px;font-size:10px;color:var(--t2); }
+.dot { width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0; }
+.lbl { font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--green); }
+.tmd { font-size:14px;font-weight:400;line-height:1.3; }
+.tsm { font-size:11px;font-weight:300;color:var(--t2);line-height:1.5; }
+.txs { font-family:'DM Mono',monospace;font-size:9px;color:var(--t2); }
+
+.btn { display:inline-block;padding:9px 20px;border-radius:100px;border:1px solid var(--fog-b);background:rgba(255,255,255,0.09);color:var(--t1);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:400;cursor:pointer;transition:background 0.2s;white-space:nowrap; }
+.btn:hover,.btn:active{background:rgba(255,255,255,0.16);}
+.btng{background:rgba(126,184,212,0.18);border-color:rgba(126,184,212,0.4);color:#c4e4f4;}
+.btng:hover,.btng:active{background:rgba(126,184,212,0.28);}
+.btnw{width:100%;display:block;text-align:center;}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 12px;}
+.chip{padding:5px 12px;border-radius:100px;border:1px solid var(--fog-b);background:transparent;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:300;color:var(--t2);cursor:pointer;transition:all 0.2s;}
+.chip.sel{background:rgba(126,184,212,0.18);border-color:rgba(126,184,212,0.4);color:#c4e4f4;}
+
+.sdots{display:flex;gap:5px;margin-bottom:10px;}
+.sd{width:16px;height:2px;border-radius:2px;background:rgba(255,255,255,0.15);transition:background 0.3s;}
+.sd.on{background:var(--green);}
+
+.fbg{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:11px;}
+.fbb{padding:9px 6px;border-radius:8px;border:1px solid var(--fog-b);background:var(--fog);color:var(--t2);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:300;cursor:pointer;transition:all 0.2s;text-align:center;backdrop-filter:blur(18px);}
+.fbb:hover{background:rgba(255,255,255,0.12);color:var(--t1);}
+
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+@keyframes su{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── VISITOR CAROUSEL ── */
+#vid-over {
+  position:fixed;inset:0;z-index:50;
+  background:rgba(0,0,0,0.82);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;padding:24px;
+}
+.carousel-header {
+  width:100%;max-width:560px;
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;animation:fu 0.5s both;
+}
+.carousel-title { text-align:left; }
+.carousel-nav { display:flex;align-items:center;gap:10px; }
+.cnav-btn {
+  width:34px;height:34px;border-radius:50%;
+  border:1px solid var(--fog-b);background:var(--fog);
+  backdrop-filter:blur(18px);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background 0.2s;color:var(--t1);font-size:14px;
+}
+.cnav-btn:hover{background:rgba(255,255,255,0.15);}
+.cnav-btn:disabled{opacity:0.3;cursor:default;}
+.carousel-counter{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);}
+
+.vframe { width:100%;max-width:560px;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid var(--fog-b);animation:fu 0.5s 0.1s both;opacity:0;animation-fill-mode:both; }
+.vframe iframe{width:100%;height:100%;border:none;display:block;}
+
+.carousel-actions {
+  width:100%;max-width:560px;
+  display:flex;gap:10px;margin-top:14px;
+  animation:fu 0.5s 0.2s both;opacity:0;animation-fill-mode:both;
+}
+.leave-btn {
+  flex:1;padding:10px 16px;border-radius:100px;
+  border:1px solid rgba(232,214,211,0.3);
+  background:rgba(232,214,211,0.1);color:#f0e0dd;
+  font-family:'DM Sans',sans-serif;font-size:12px;
+  cursor:pointer;transition:background 0.2s;text-align:center;
+}
+.leave-btn:hover{background:rgba(232,214,211,0.18);}
+
+/* ── LEAVE A NOTE MODAL ── */
+#leave-modal {
+  position:fixed;inset:0;z-index:60;
+  background:rgba(0,0,0,0.85);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px;gap:14px;
+}
+.leave-card {
+  width:100%;max-width:480px;
+  background:rgba(20,22,20,0.9);
+  border:1px solid var(--fog-b);
+  border-radius:16px;
+  backdrop-filter:blur(32px);
+  overflow:hidden;
+  animation:su 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+.leave-tabs {
+  display:flex;border-bottom:1px solid var(--fog-b);
+}
+.ltab {
+  flex:1;padding:13px;text-align:center;
+  font-size:11px;font-weight:400;color:var(--t2);
+  cursor:pointer;transition:all 0.2s;
+  border-bottom:2px solid transparent;
+}
+.ltab.active{color:var(--t1);border-bottom-color:var(--green);}
+.leave-body { padding:18px; }
+
+/* recording states */
+.rec-idle,.rec-recording,.rec-done { display:none; }
+.rec-idle.on,.rec-recording.on,.rec-done.on { display:block; }
+
+.rec-btn-wrap { text-align:center;margin:8px 0 16px; }
+.rec-circle {
+  width:64px;height:64px;border-radius:50%;
+  background:rgba(232,214,211,0.12);border:2px solid rgba(232,214,211,0.3);
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.2s;margin:0 auto;
+}
+.rec-circle:hover{background:rgba(232,214,211,0.2);}
+.rec-circle.recording{background:rgba(220,60,60,0.2);border-color:rgba(220,60,60,0.6);animation:recPulse 1s ease-in-out infinite;}
+@keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,60,60,0.3)}50%{box-shadow:0 0 0 12px rgba(220,60,60,0)}}
+.rec-icon { font-size:22px; }
+.rec-timer { font-family:'DM Mono',monospace;font-size:12px;color:var(--t2);text-align:center;margin-top:4px; }
+.rec-hint { font-size:11px;color:var(--t2);text-align:center;margin-bottom:10px; }
+
+/* text note */
+.note-textarea {
+  width:100%;background:rgba(255,255,255,0.05);
+  border:1px solid var(--fog-b);border-radius:8px;
+  color:var(--t1);font-family:'DM Sans',sans-serif;font-size:12px;
+  padding:10px 12px;resize:none;outline:none;line-height:1.5;
+  min-height:90px;
+}
+.note-textarea::placeholder{color:var(--t2);}
+.note-textarea:focus{border-color:rgba(126,184,212,0.40);}
+.char-count{font-family:'DM Mono',monospace;font-size:9px;color:var(--t2);text-align:right;margin-top:4px;}
+
+.leave-submit { width:100%;display:block;text-align:center;margin-top:12px;padding:10px;border-radius:100px;border:1px solid rgba(126,184,212,0.40);background:rgba(126,184,212,0.18);color:#c4e4f4;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:background 0.2s; }
+.leave-submit:hover{background:rgba(126,184,212,0.28);}
+
+.leave-close { font-family:'DM Mono',monospace;font-size:9px;color:var(--t2);cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;text-align:center; }
+.leave-close:hover{color:var(--t1);}
+</style>
+</head>
+<body>
+
+<video id="camera" autoplay playsinline muted></video>
+<div id="fallback"></div>
+<div id="vignette"></div>
+<div id="mglow"></div>
+<div id="tint"></div>
+<div id="particles"></div>
+<div id="ptrack"><div id="pfill"></div></div>
+
+<div id="scan-wrap">
+  <div class="reticle"><div class="rbox">
+    <div class="rc tl"></div><div class="rc tr"></div>
+    <div class="rc bl"></div><div class="rc br"></div>
+    <div class="sweep"></div>
+  </div></div>
+</div>
+
+<div id="hud">
+
+  <!-- ════ SPLASH ════ -->
+  <div id="pnl-splash" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+    <div style="text-align:center;padding:0 10%;animation:fu 1s cubic-bezier(0.16,1,0.3,1) both;">
+      <div style="font-size:52px;font-weight:200;letter-spacing:-0.04em;line-height:1;margin-bottom:6px;">Detour</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.16em;color:var(--green);margin-bottom:16px;">2040 · AR LAYER</div>
+      <div style="font-size:14px;font-weight:300;color:var(--t2);line-height:1.6;margin-bottom:28px;">Rediscover the city<br>between your routines</div>
+      <button class="btn btng" style="font-size:13px;padding:11px 32px;" onclick="startOb()">Begin</button>
+    </div>
+  </div>
+
+  <!-- ════ ONBOARDING ════ -->
+  <div id="pnl-ob-info" style="position:absolute;bottom:40px;left:28px;display:none;max-width:300px;">
+    <div class="card" id="obpanel" style="animation:su 0.5s cubic-bezier(0.16,1,0.3,1) both;">
+      <div class="sdots">
+        <div class="sd on" id="sd0"></div><div class="sd" id="sd1"></div><div class="sd" id="sd2"></div>
+      </div>
+      <div id="obs0">
+        <div class="lbl" style="margin-bottom:5px;">Step 1 of 3</div>
+        <div class="tmd" style="margin-bottom:4px;">Location</div>
+        <div class="tsm">To suggest detours along your daily paths</div>
+      </div>
+      <div id="obs1" style="display:none;">
+        <div class="lbl" style="margin-bottom:5px;">Step 2 of 3</div>
+        <div class="tmd" style="margin-bottom:4px;">Calendar</div>
+        <div class="tsm">Suggests at the right moment — never an interruption</div>
+      </div>
+      <div id="obs2" style="display:none;">
+        <div class="lbl" style="margin-bottom:5px;">Step 3 of 3</div>
+        <div class="tmd" style="margin-bottom:3px;">Your interests</div>
+        <div class="tsm">Select at least 2</div>
+        <div class="chips" id="chips">
+          <div class="chip" onclick="tc(this)">Murals</div>
+          <div class="chip" onclick="tc(this)">Quiet streets</div>
+          <div class="chip" onclick="tc(this)">Blossoms</div>
+          <div class="chip" onclick="tc(this)">Cafes</div>
+          <div class="chip" onclick="tc(this)">Architecture</div>
+          <div class="chip" onclick="tc(this)">Music</div>
+          <div class="chip" onclick="tc(this)">Gardens</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="pnl-ob-btn" style="position:absolute;bottom:40px;right:28px;display:none;">
+    <div id="obbtn0" style="animation:su 0.5s 0.1s both;opacity:0;animation-fill-mode:both;">
+      <button class="btn btng" onclick="obStep(1)">Allow location</button>
+    </div>
+    <div id="obbtn1" style="display:none;">
+      <button class="btn btng" onclick="obStep(2)">Allow calendar</button>
+    </div>
+    <div id="obbtn2" style="display:none;">
+      <button class="btn btng" id="obfin" style="opacity:0.4;" onclick="finishOb()" disabled>Continue</button>
+    </div>
+  </div>
+
+  <!-- ════ HOME ════ -->
+  <!-- top-left: time + vitals -->
+  <div id="pnl-home-tl" style="position:absolute;top:28px;left:28px;display:none;animation:fi 0.5s both;">
+    <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:300;letter-spacing:-0.02em;line-height:1;" id="timeEl">4:32</div>
+    <div style="font-size:10px;font-weight:300;color:var(--t2);margin-top:4px;" id="dateEl">Thu · Evening</div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <div class="pill">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--warm)" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span style="color:var(--t1);font-family:'DM Mono',monospace;">72</span><span>bpm</span>
+      </div>
+      <div class="pill">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span style="color:var(--t1);font-family:'DM Mono',monospace;">4.2k</span><span>steps</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- top-right: upcoming card — clicking THIS triggers the route prompt -->
+  <div id="pnl-home-tr" style="position:absolute;top:28px;right:28px;display:none;animation:fi 0.5s 0.15s both;">
+    <div class="card" style="max-width:170px;cursor:pointer;transition:background 0.2s;" onclick="showRP()" onmouseenter="this.style.background='rgba(255,255,255,0.11)'" onmouseleave="this.style.background=''">
+      <div class="lbl" style="margin-bottom:5px;">Upcoming</div>
+      <div style="font-size:13px;font-weight:400;margin-bottom:3px;">Dog walk</div>
+      <div class="txs" style="margin-bottom:8px;">In 10 min · 20 min loop</div>
+      <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;background:rgba(126,184,212,0.12);border:1px solid rgba(126,184,212,0.22);">
+        <div class="dot" style="width:4px;height:4px;"></div>
+        <span style="font-size:8px;color:var(--green);font-family:'DM Mono',monospace;letter-spacing:0.07em;">Tap to see route</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- bottom-left: detour pill -->
+  <div id="pnl-home-bl" style="position:absolute;bottom:28px;left:28px;display:none;animation:fi 0.5s 0.3s both;">
+    <div class="pill"><div class="dot"></div>2 detours available nearby</div>
+  </div>
+
+  <!-- ════ ROUTE PROMPT (appears after tapping dog walk card) ════ -->
+  <div id="pnl-route-prompt" style="position:absolute;top:28px;right:28px;display:none;max-width:240px;">
+    <div class="card" style="animation:su 0.35s cubic-bezier(0.16,1,0.3,1) both;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;">
+        <div class="lbl">Mural route · nearby</div>
+        <span onclick="skipRoute()" style="font-size:16px;color:var(--t2);cursor:pointer;line-height:1;margin-top:-2px;">×</span>
+      </div>
+      <div class="tmd" style="margin-bottom:4px;">Audrey in Bloom</div>
+      <div class="tsm" style="margin-bottom:10px;">+3 min · quieter street · 0.2 mi added</div>
+      <div style="display:flex;gap:7px;">
+        <button class="btn btng" style="flex:1;font-size:11px;padding:8px 10px;" onclick="takeRoute()">Take route</button>
+        <button class="btn" style="font-size:11px;padding:8px 12px;" onclick="skipRoute()">Skip</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ ROUTE CONFIRMED ════ -->
+  <div id="pnl-route-confirmed" style="position:absolute;bottom:28px;left:28px;right:28px;display:none;max-width:360px;">
+    <div class="card" style="animation:su 0.4s both;">
+      <div class="lbl" style="margin-bottom:4px;">Route updated</div>
+      <div class="tmd" style="margin-bottom:4px;">Mural detour added</div>
+      <div class="tsm" style="margin-bottom:10px;">Head north on Bedford Ave to begin</div>
+      <button class="btn btng btnw" onclick="startNav()">Start walking</button>
+    </div>
+  </div>
+
+  <!-- ════ NAV CARD: single shell, content updates in-place ════ -->
+  <div id="pnl-nav-wrap" style="position:absolute;top:28px;left:50%;transform:translateX(-50%);display:none;">
+    <div class="card" style="text-align:center;width:170px;height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+      <div id="nav-icon-wrap" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;">
+        <!-- arrow-up default -->
+        <svg id="nav-svg" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;">
+          <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+        </svg>
+      </div>
+      <div id="nav-street" style="font-size:13px;font-weight:400;">Bedford Ave</div>
+      <div id="nav-dist" class="txs">Continue straight · 100 ft</div>
+    </div>
+  </div>
+
+  <!-- NAV ETA removed -->
+
+  <!-- ════ ARRIVAL ════ -->
+  <div id="pnl-arrival" style="position:absolute;bottom:28px;left:28px;right:28px;display:none;max-width:360px;">
+    <div class="card" style="animation:su 0.4s both;">
+      <div class="lbl" style="margin-bottom:4px;">You've arrived</div>
+      <div class="tmd" style="margin-bottom:4px;">Mural ahead</div>
+      <div class="tsm" style="margin-bottom:10px;">Look around to discover its story</div>
+      <button class="btn btng btnw" onclick="startScan()">Look closer</button>
+    </div>
+  </div>
+
+  <!-- SCAN hint -->
+  <div id="pnl-scan-hint" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);display:none;white-space:nowrap;">
+    <div class="pill">Frame the mural in the viewfinder</div>
+  </div>
+
+  <!-- ════ MURAL TAG ════ -->
+  <div id="pnl-mural-tag" style="position:absolute;top:28px;left:28px;display:none;animation:fi 0.8s 0.4s both;opacity:0;animation-fill-mode:both;">
+    <div class="card">
+      <div class="lbl" style="margin-bottom:4px;">Mural · 2039</div>
+      <div class="tmd" style="margin-bottom:3px;">Audrey in Bloom</div>
+      <div class="tsm">"Grace and resilience" — Local artist</div>
+    </div>
+  </div>
+
+  <!-- MURAL ACTION -->
+  <div id="pnl-mural-act" style="position:absolute;bottom:36px;left:50%;transform:translateX(-50%);display:none;white-space:nowrap;animation:fi 0.6s 0.9s both;opacity:0;animation-fill-mode:both;">
+    <button class="btn" style="font-size:12px;padding:10px 22px;" onclick="showVid()">Hear from other visitors</button>
+  </div>
+
+  <!-- ════ REFLECTION ════ -->
+  <div id="pnl-reflection" style="position:absolute;bottom:28px;left:28px;right:28px;display:none;max-width:360px;">
+    <div class="card" style="animation:su 0.5s both;">
+      <div class="lbl" style="margin-bottom:4px;">Detour complete</div>
+      <div class="tmd" style="margin-bottom:3px;">You discovered something new</div>
+      <div class="tsm" style="margin-bottom:10px;">Help Detour learn what you love</div>
+      <div class="fbg" style="margin-bottom:12px;">
+        <button class="fbb" onclick="giveFeedback(this)">More like this</button>
+        <button class="fbb" onclick="giveFeedback(this)">More murals</button>
+        <button class="fbb" onclick="giveFeedback(this)">Quieter routes</button>
+        <button class="fbb" onclick="giveFeedback(this)">Skip next time</button>
+      </div>
+      <button class="btn btng btnw" onclick="backToHome()" style="font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;">Continue the walk <i data-lucide="arrow-right" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.5;"></i></button>
+    </div>
+  </div>
+
+</div><!-- /hud -->
+
+<!-- ════ VISITOR CAROUSEL OVERLAY ════ -->
+<div id="vid-over">
+  <div class="carousel-header">
+    <div class="carousel-title">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;color:var(--green);margin-bottom:3px;">VOICES FROM THIS SPOT</div>
+      <div style="font-size:12px;font-weight:300;color:var(--t2);" id="visitor-name">Maya · walked past Tuesday</div>
+    </div>
+    <div class="carousel-nav">
+      <button class="cnav-btn" id="prev-btn" onclick="prevVisitor()" disabled>‹</button>
+      <span class="carousel-counter" id="carousel-counter">1 / 3</span>
+      <button class="cnav-btn" id="next-btn" onclick="nextVisitor()">›</button>
+    </div>
+  </div>
+
+  <div class="vframe" id="vid-frame">
+    <iframe id="vid-iframe" src="https://www.youtube.com/embed/scV_GR-SANY?autoplay=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+  </div>
+
+  <div class="carousel-actions">
+    <button class="btn btnw" style="flex:1;font-size:11px;display:flex;align-items:center;justify-content:center;gap:6px;" onclick="showLeaveModal('video')">
+      <i data-lucide="video" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.5;flex-shrink:0;"></i>Leave a video
+    </button>
+    <button class="leave-btn" style="display:flex;align-items:center;justify-content:center;gap:5px;" onclick="showLeaveModal('audio')">
+      <i data-lucide="mic" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.5;flex-shrink:0;"></i>Audio
+    </button>
+    <button class="leave-btn" style="display:flex;align-items:center;justify-content:center;gap:5px;" onclick="showLeaveModal('text')">
+      <i data-lucide="pencil" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.5;flex-shrink:0;"></i>Note
+    </button>
+  </div>
+
+  <button class="btn" style="margin-top:10px;padding:8px 28px;font-size:11px;animation:fu 0.5s 0.3s both;opacity:0;animation-fill-mode:both;" onclick="showRefl()">Continue</button>
+</div>
+
+<!-- ════ LEAVE A NOTE MODAL ════ -->
+<div id="leave-modal">
+  <div class="leave-card">
+    <div class="leave-tabs">
+      <div class="ltab active" id="tab-video" onclick="switchTab('video')">Video</div>
+      <div class="ltab" id="tab-audio" onclick="switchTab('audio')">Audio</div>
+      <div class="ltab" id="tab-text" onclick="switchTab('text')">Note</div>
+    </div>
+    <div class="leave-body">
+
+      <!-- VIDEO TAB -->
+      <div id="body-video">
+        <div class="tsm" style="margin-bottom:10px;">Record a short message for the next person who finds this mural</div>
+        <div class="rec-btn-wrap">
+          <div class="rec-circle" id="vid-rec-circle" onclick="toggleRecord('vid')">
+            <i data-lucide="video" id="vid-rec-icon" style="width:22px;height:22px;stroke:var(--warm);stroke-width:1.5;"></i>
+          </div>
+          <div class="rec-timer" id="vid-timer" style="margin-top:6px;">0:00</div>
+        </div>
+        <div class="rec-hint" id="vid-hint">Tap to start recording</div>
+        <div id="vid-done-msg" style="display:none;text-align:center;padding:8px 0;">
+          <div style="font-size:13px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:5px;"><i data-lucide="check-circle" style="width:14px;height:14px;stroke:var(--green);stroke-width:1.5;"></i> Recorded</div>
+          <div class="tsm">0:12 · ready to attach</div>
+        </div>
+        <button class="leave-submit" id="vid-submit" style="opacity:0.4;" disabled onclick="submitNote()">Attach to this mural</button>
+      </div>
+
+      <!-- AUDIO TAB -->
+      <div id="body-audio" style="display:none;">
+        <div class="tsm" style="margin-bottom:10px;">Leave your voice at this spot</div>
+        <div class="rec-btn-wrap">
+          <div class="rec-circle" id="aud-rec-circle" onclick="toggleRecord('aud')">
+            <i data-lucide="mic" id="aud-rec-icon" style="width:22px;height:22px;stroke:var(--warm);stroke-width:1.5;"></i>
+          </div>
+          <div class="rec-timer" id="aud-timer" style="margin-top:6px;">0:00</div>
+        </div>
+        <div class="rec-hint" id="aud-hint">Tap to start recording</div>
+        <div id="aud-done-msg" style="display:none;text-align:center;padding:8px 0;">
+          <div style="font-size:13px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:5px;"><i data-lucide="check-circle" style="width:14px;height:14px;stroke:var(--green);stroke-width:1.5;"></i> Recorded</div>
+          <div class="tsm">0:09 · ready to attach</div>
+        </div>
+        <button class="leave-submit" id="aud-submit" style="opacity:0.4;" disabled onclick="submitNote()">Attach to this mural</button>
+      </div>
+
+      <!-- TEXT TAB -->
+      <div id="body-text" style="display:none;">
+        <div class="tsm" style="margin-bottom:8px;">Leave a few words for the next visitor</div>
+        <textarea class="note-textarea" id="note-txt" maxlength="160" placeholder="What did this mural make you feel?" oninput="updateChar()"></textarea>
+        <div class="char-count"><span id="charCount">0</span> / 160</div>
+        <button class="leave-submit" id="txt-submit" style="margin-top:8px;opacity:0.4;" disabled onclick="submitNote()">Attach to this mural</button>
+      </div>
+
+    </div>
+  </div>
+  <div class="leave-close" onclick="closeLeaveModal()" style="display:flex;align-items:center;gap:5px;justify-content:center;">
+    <i data-lucide="arrow-left" style="width:12px;height:12px;stroke:currentColor;stroke-width:1.5;"></i>Back to visitors
+  </div>
+</div>
+
+<script>
+function show(id, flex) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = flex ? 'flex' : 'block';
+}
+function hide(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'none';
+}
+
+// ── CAMERA ──
+(async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{facingMode:'environment',width:{ideal:1920}}, audio:false });
+    document.getElementById('camera').srcObject = stream;
+  } catch {
+    document.getElementById('camera').style.display = 'none';
+    document.getElementById('fallback').style.display = 'block';
+  }
+})();
+
+// ── TIME ──
+function tick() {
+  const n = new Date(), h = n.getHours(), m = n.getMinutes();
+  document.getElementById('timeEl').textContent = `${h%12||12}:${m<10?'0'+m:m}`;
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const g = h<12?'Morning':h<17?'Afternoon':'Evening';
+  document.getElementById('dateEl').textContent = `${days[n.getDay()]} · ${g}`;
+}
+tick(); setInterval(tick, 1000);
+
+// ── ONBOARDING ──
+function startOb() {
+  hide('pnl-splash'); show('tint');
+  show('pnl-ob-info'); show('pnl-ob-btn');
+}
+function obStep(n) {
+  document.getElementById('obs'+(n-1)).style.display='none';
+  document.getElementById('obbtn'+(n-1)).style.display='none';
+  document.getElementById('sd'+(n-1)).classList.remove('on');
+  document.getElementById('obs'+n).style.display='block';
+  document.getElementById('obbtn'+n).style.display='block';
+  document.getElementById('sd'+n).classList.add('on');
+  const p=document.getElementById('obpanel');
+  p.style.animation='none'; void p.offsetWidth;
+  p.style.animation='su 0.4s cubic-bezier(0.16,1,0.3,1) both';
+}
+function tc(el) {
+  el.classList.toggle('sel');
+  const n = document.querySelectorAll('.chip.sel').length;
+  const btn = document.getElementById('obfin');
+  btn.disabled = n<2; btn.style.opacity = n>=2?'1':'0.4';
+}
+function finishOb() {
+  hide('pnl-ob-info'); hide('pnl-ob-btn'); hide('tint');
+  show('pnl-home-tl'); show('pnl-home-tr'); show('pnl-home-bl');
+}
+
+// ── HOME: route prompt only on card tap ──
+function showRP() {
+  show('pnl-route-prompt');
+}
+function takeRoute() {
+  hide('pnl-route-prompt'); hide('pnl-home-tr'); hide('pnl-home-bl');
+  show('pnl-route-confirmed');
+}
+function skipRoute() {
+  hide('pnl-route-prompt');
+}
+
+// SVG paths for nav icons
+const SVG_UP    = '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>';
+const SVG_RIGHT = '<polyline points="9 18 15 12 9 6"/>';
+
+function setNavIcon(paths, color) {
+  const svg = document.getElementById('nav-svg');
+  svg.innerHTML = paths;
+  svg.setAttribute('stroke', color);
+}
+
+// ── NAVIGATION ──
+function startNav() {
+  hide('pnl-route-confirmed');
+  // keep pnl-home-tl visible so time/vitals always show
+  show('ptrack'); show('pnl-nav-wrap');
+  document.getElementById('pfill').style.width = '0%';
+  setNavIcon(SVG_UP, 'rgba(255,255,255,0.95)');
+  document.getElementById('nav-street').textContent = 'Bedford Ave';
+  document.getElementById('nav-dist').textContent = 'Continue straight · 100 ft';
+
+  let p = 0;
+  const iv = setInterval(() => {
+    p += 5;
+    document.getElementById('pfill').style.width = Math.min(p, 100) + '%';
+    if (p === 50) {
+      setNavIcon(SVG_RIGHT, '#7eb8d4');
+      document.getElementById('nav-street').textContent = 'Turn right · N 7th St';
+      document.getElementById('nav-dist').textContent = 'Mural is 60 ft ahead';
+    }
+    if (p >= 100) { clearInterval(iv); setTimeout(arrive, 500); }
+  }, 500);
+}
+
+function arrive() {
+  hide('pnl-nav-wrap'); hide('ptrack');
+  show('pnl-arrival');
+}
+
+// ── MURAL ──
+function startScan() {
+  hide('pnl-arrival');
+  show('scan-wrap', true); show('pnl-scan-hint');
+  setTimeout(activateMural, 2400);
+}
+function activateMural() {
+  hide('scan-wrap'); hide('pnl-scan-hint');
+  show('pnl-mural-tag'); show('pnl-mural-act');
+  document.getElementById('mglow').style.display = 'block';
+  const c = document.getElementById('particles'); c.innerHTML = '';
+  for (let i=0; i<18; i++) {
+    const p = document.createElement('div'); p.className='pt';
+    p.style.left = (10+Math.random()*80)+'%';
+    p.style.bottom = (10+Math.random()*50)+'%';
+    p.style.animationDelay = (Math.random()*4)+'s';
+    p.style.animationDuration = (4+Math.random()*3)+'s';
+    c.appendChild(p);
+  }
+}
+function showVid() {
+  hide('pnl-mural-tag'); hide('pnl-mural-act');
+  document.getElementById('mglow').style.display='none';
+  document.getElementById('particles').innerHTML='';
+  show('vid-over', true);
+}
+function showRefl() {
+  hide('vid-over'); hide('leave-modal');
+  show('pnl-reflection');
+}
+function giveFeedback(el) {
+  document.querySelectorAll('.fbb').forEach(b => {
+    b.style.background = ''; b.style.color = ''; b.style.borderColor = '';
+  });
+  el.style.background = 'rgba(126,184,212,0.18)';
+  el.style.color = '#c4e4f4';
+  el.style.borderColor = 'rgba(126,184,212,0.40)';
+}
+
+function backToHome() {
+  hide('pnl-reflection');
+  show('pnl-home-tl');
+  document.getElementById('pfill').style.width = '60%';
+  setNavIcon(SVG_UP, 'rgba(255,255,255,0.95)');
+  document.getElementById('nav-street').textContent = 'Bedford Ave';
+  document.getElementById('nav-dist').textContent = 'Continue the walk · 200 ft';
+  show('ptrack'); show('pnl-nav-wrap');
+  tick();
+}
+
+// ── VISITOR CAROUSEL ──
+const visitors = [
+  { name: 'Maya · walked past Tuesday',   src: 'https://www.youtube.com/embed/scV_GR-SANY?autoplay=0&rel=0&modestbranding=1' },
+  { name: 'James · Sunday morning',       src: 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0&rel=0&modestbranding=1' },
+  { name: 'Priya · last Saturday',        src: 'https://www.youtube.com/embed/scV_GR-SANY?autoplay=0&rel=0&modestbranding=1' },
+];
+let vidIdx = 0;
+
+function updateCarousel() {
+  const v = visitors[vidIdx];
+  document.getElementById('visitor-name').textContent = v.name;
+  document.getElementById('carousel-counter').textContent = `${vidIdx+1} / ${visitors.length}`;
+  document.getElementById('vid-iframe').src = v.src;
+  document.getElementById('prev-btn').disabled = vidIdx === 0;
+  document.getElementById('next-btn').disabled = vidIdx === visitors.length-1;
+}
+function prevVisitor() { if(vidIdx>0){ vidIdx--; updateCarousel(); } }
+function nextVisitor() { if(vidIdx<visitors.length-1){ vidIdx++; updateCarousel(); } }
+
+// ── LEAVE A NOTE ──
+function showLeaveModal(tab) {
+  show('leave-modal', true);
+  switchTab(tab);
+}
+function closeLeaveModal() {
+  hide('leave-modal');
+}
+function switchTab(tab) {
+  ['video','audio','text'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('body-'+t).style.display = t===tab ? 'block' : 'none';
+  });
+}
+
+// Recording simulation
+const recState = { vid: false, aud: false };
+const recTimers = {};
+
+function toggleRecord(type) {
+  const circle = document.getElementById(type+'-rec-circle');
+  const icon   = document.getElementById(type+'-rec-icon');
+  const timer  = document.getElementById(type+'-timer');
+  const hint   = document.getElementById(type+'-hint');
+  const done   = document.getElementById(type+'-done-msg');
+  const submit = document.getElementById(type+'-submit');
+
+  if (!recState[type]) {
+    // start recording
+    recState[type] = true;
+    circle.classList.add('recording');
+    icon.setAttribute('data-lucide', 'square');
+    lucide.createIcons();
+    hint.textContent = 'Recording… tap to stop';
+    let secs = 0;
+    recTimers[type] = setInterval(() => {
+      secs++;
+      const m = Math.floor(secs/60), s = secs%60;
+      timer.textContent = `${m}:${s<10?'0'+s:s}`;
+      if (secs >= 15) stopRecord(type); // auto-stop at 15s
+    }, 1000);
+  } else {
+    stopRecord(type);
+  }
+}
+
+function stopRecord(type) {
+  recState[type] = false;
+  clearInterval(recTimers[type]);
+  const circle = document.getElementById(type+'-rec-circle');
+  const hint   = document.getElementById(type+'-hint');
+  const done   = document.getElementById(type+'-done-msg');
+  const submit = document.getElementById(type+'-submit');
+  const icon   = document.getElementById(type+'-rec-icon');
+  circle.classList.remove('recording');
+  icon.setAttribute('data-lucide', type==='vid' ? 'video' : 'mic');
+  lucide.createIcons();
+  hint.style.display = 'none';
+  done.style.display = 'block';
+  submit.disabled = false; submit.style.opacity = '1';
+}
+
+function updateChar() {
+  const txt = document.getElementById('note-txt');
+  const n = txt.value.length;
+  document.getElementById('charCount').textContent = n;
+  const btn = document.getElementById('txt-submit');
+  btn.disabled = n<3; btn.style.opacity = n>=3?'1':'0.4';
+}
+
+function submitNote() {
+  hide('leave-modal');
+  const pill = document.createElement('div');
+  pill.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:55;animation:fu 0.5s both;white-space:nowrap;';
+  pill.innerHTML = '<div class="pill" style="background:rgba(126,184,212,0.20);border-color:rgba(126,184,212,0.40);color:#c4e4f4;"><div class="dot"></div>Note attached to this mural</div>';
+  document.body.appendChild(pill);
+  setTimeout(() => { pill.style.opacity='0'; pill.style.transition='opacity 0.5s'; setTimeout(()=>pill.remove(),500); }, 2500);
+}
+
+// init Lucide icons after DOM is ready
+lucide.createIcons();
+</script>
+</body>
+</html>
