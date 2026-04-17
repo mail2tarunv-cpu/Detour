@@ -300,8 +300,8 @@ html,body { width:100%;height:100%;background:#000;overflow:hidden;font-family:'
         <div class="lbl">Mural route · nearby</div>
         <span onclick="skipRoute()" style="font-size:16px;color:var(--t2);cursor:pointer;line-height:1;margin-top:-2px;">×</span>
       </div>
-      <div class="tmd" style="margin-bottom:4px;">Audrey in Bloom</div>
-      <div class="tsm" style="margin-bottom:10px;">+3 min · quieter street · 0.2 mi added</div>
+      <div class="tmd" style="margin-bottom:4px;">KONY Mural</div>
+      <div class="tsm" style="margin-bottom:10px;">+3 min · Bedford Ave · 0.2 mi added</div>
       <div style="display:flex;gap:7px;">
         <button class="btn btng" style="flex:1;font-size:11px;padding:8px 10px;" onclick="takeRoute()">Take route</button>
         <button class="btn" style="font-size:11px;padding:8px 12px;" onclick="skipRoute()">Skip</button>
@@ -350,12 +350,12 @@ html,body { width:100%;height:100%;background:#000;overflow:hidden;font-family:'
     <div class="pill">Frame the mural in the viewfinder</div>
   </div>
 
-  <!-- ════ MURAL TAG ════ -->
-  <div id="pnl-mural-tag" style="position:absolute;top:28px;left:28px;display:none;animation:fi 0.8s 0.4s both;opacity:0;animation-fill-mode:both;">
+  <!-- ════ MURAL TAG — top-right ════ -->
+  <div id="pnl-mural-tag" style="position:absolute;top:28px;right:28px;display:none;animation:fi 0.8s 0.4s both;opacity:0;animation-fill-mode:both;">
     <div class="card">
-      <div class="lbl" style="margin-bottom:4px;">Mural · 2039</div>
-      <div class="tmd" style="margin-bottom:3px;">Audrey in Bloom</div>
-      <div class="tsm">"Grace and resilience" — Local artist</div>
+      <div class="lbl" style="margin-bottom:4px;">Mural · Bed-Stuy, Brooklyn</div>
+      <div class="tmd" style="margin-bottom:3px;">KONY Mural</div>
+      <div class="tsm">King of New York — Art1, 2010</div>
     </div>
   </div>
 
@@ -391,16 +391,27 @@ html,body { width:100%;height:100%;background:#000;overflow:hidden;font-family:'
     </div>
     <div class="carousel-nav">
       <button class="cnav-btn" id="prev-btn" onclick="prevVisitor()" disabled>‹</button>
-      <span class="carousel-counter" id="carousel-counter">1 / 3</span>
+      <span class="carousel-counter" id="carousel-counter">1 / 2</span>
       <button class="cnav-btn" id="next-btn" onclick="nextVisitor()">›</button>
     </div>
   </div>
 
-  <div class="vframe" id="vid-frame">
-    <iframe id="vid-iframe" src="https://www.youtube.com/embed/scV_GR-SANY?autoplay=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+  <!-- Photo card with play button -->
+  <div style="width:100%;max-width:560px;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid var(--fog-b);position:relative;cursor:pointer;animation:fu 0.5s 0.1s both;opacity:0;animation-fill-mode:both;" onclick="togglePlay()" id="photo-card">
+    <img id="visitor-img" src="https://raw.githubusercontent.com/mail2tarunv-cpu/Detour/main/pic%202.jpg" alt="KONY Mural" style="width:100%;height:100%;object-fit:cover;display:block;">
+    <!-- dark gradient at bottom for text legibility -->
+    <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%);pointer-events:none;"></div>
+    <!-- play button -->
+    <div id="play-btn" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);border:2px solid rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;transition:background 0.2s;">
+      <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.95)" style="width:22px;height:22px;margin-left:3px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </div>
+    <!-- visitor caption -->
+    <div style="position:absolute;bottom:12px;left:14px;right:14px;">
+      <div style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.9);" id="visitor-caption">KONY Mural · Bedford Ave, Bed-Stuy</div>
+    </div>
   </div>
 
-  <div class="carousel-actions">
+  <div class="carousel-actions" style="animation:fu 0.5s 0.2s both;opacity:0;animation-fill-mode:both;">
     <button class="btn btnw" style="flex:1;font-size:11px;display:flex;align-items:center;justify-content:center;gap:6px;" onclick="showLeaveModal('video')">
       <i data-lucide="video" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.5;flex-shrink:0;"></i>Leave a video
     </button>
@@ -636,20 +647,30 @@ function backToHome() {
 
 // ── VISITOR CAROUSEL ──
 const visitors = [
-  { name: 'Maya · walked past Tuesday',   src: 'https://www.youtube.com/embed/scV_GR-SANY?autoplay=0&rel=0&modestbranding=1' },
-  { name: 'James · Sunday morning',       src: 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0&rel=0&modestbranding=1' },
-  { name: 'Priya · last Saturday',        src: 'https://www.youtube.com/embed/scV_GR-SANY?autoplay=0&rel=0&modestbranding=1' },
+  { name: 'Maya · walked past Tuesday',   img: 'https://raw.githubusercontent.com/mail2tarunv-cpu/Detour/main/pic%202.jpg', caption: 'KONY Mural · Bedford Ave, Bed-Stuy' },
+  { name: 'James · Sunday morning',       img: 'https://raw.githubusercontent.com/mail2tarunv-cpu/Detour/main/pic1.jpg',     caption: 'King of New York · Art1, 2010' },
 ];
 let vidIdx = 0;
+let playActive = false;
 
 function updateCarousel() {
   const v = visitors[vidIdx];
   document.getElementById('visitor-name').textContent = v.name;
   document.getElementById('carousel-counter').textContent = `${vidIdx+1} / ${visitors.length}`;
-  document.getElementById('vid-iframe').src = v.src;
+  document.getElementById('visitor-img').src = v.img;
+  document.getElementById('visitor-caption').textContent = v.caption;
   document.getElementById('prev-btn').disabled = vidIdx === 0;
-  document.getElementById('next-btn').disabled = vidIdx === visitors.length-1;
+  document.getElementById('next-btn').disabled = vidIdx === visitors.length - 1;
+  // reset play state on slide change
+  playActive = false;
+  document.getElementById('play-btn').style.display = 'flex';
 }
+
+function togglePlay() {
+  playActive = !playActive;
+  document.getElementById('play-btn').style.display = playActive ? 'none' : 'flex';
+}
+
 function prevVisitor() { if(vidIdx>0){ vidIdx--; updateCarousel(); } }
 function nextVisitor() { if(vidIdx<visitors.length-1){ vidIdx++; updateCarousel(); } }
 
